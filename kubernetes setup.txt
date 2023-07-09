@@ -1,0 +1,170 @@
+Requirements:
+1. Port 6443, 10250 is opened
+
+2. sudo swapoff -a 
+
+
+=========================================
+Part 1: Install DOCKER ENGINE 
+https://docs.docker.com/engine/install/ubuntu/
+=========================================
+
+Step 0:
+sudo swapoff -a
+
+Set up the repository:-
+1. Update the apt package index and install packages to allow apt to use a repository over HTTPS:
+ sudo apt-get update
+ sudo apt-get install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+2. Add Docker’s official GPG key:
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+3. Use the following command to set up the stable repository. 
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+
+4. Install Docker Engine- Update the apt package index, and install the latest version of Docker Engine and containerd
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
+
+5. Verify:
+sudo systemctl status docker
+sudo docker run hello-world
+
+
+6. Add the current user as ADMIN(without SUDO)
+sudo usermod -aG docker ${USER}
+
+To apply the new group membership, log out of the server and back in, or type the following:
+sudo su
+su - ubuntu
+
+#Verification: You will be prompted to enter your user’s password to continue.
+Confirm that your user is now added to the docker group by typing:
+id -nG
+
+#Optional:
+If you need to add a user to the docker group that you’re not logged in as, declare that username explicitly using:
+sudo usermod -aG docker username 
+========================================= =========================================
+Part 2: Install Kubeadm, Kubectl and Kubelet
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+========================================= =========================================
+
+1. Update the apt package index and install packages needed to use the Kubernetes apt repository:
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl
+
+2. Download the Google Cloud public signing key:
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+3. Add the Kubernetes apt repository:
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+4. Update apt package index, install kubelet, kubeadm and kubectl, and pin their version:
+sudo apt-get update
+sudo apt-get install -y kubeadm=1.21.0-00 kubelet=1.21.0-00 kubectl=1.21.0-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+Verification:
+sudo systemctl status kubelet 
+
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+========================================= =========================================
+Part 3: Creating a cluster with kubeadm
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+========================================= =========================================
+Using kubeadm, you can create a minimum viable Kubernetes cluster that 
+conforms to best practices. In fact, you can use kubeadm to set up a cluster 
+that will pass the Kubernetes Conformance tests. kubeadm also supports other cluster lifecycle functions, 
+such as bootstrap tokens and cluster upgrades.
+
+The kubeadm tool is good if you need:
+
+A simple way for you to try out Kubernetes, possibly for the first time.
+A way for existing users to automate setting up a cluster and test their application.
+A building block in other ecosystem and/or installer tools with a larger scope.
+You can install and use kubeadm on various machines: your laptop, a set of cloud servers, 
+a Raspberry Pi, and more. Whether you're deploying into the cloud or on-premises, you can integrate
+ kubeadm into provisioning systems such as Ansible or Terraform.
+
+
+
+Step 1:
+sudo kubeadm init --kubernetes-version 1.21.0 --pod-network-cidr 192.168.0.0/16
+
+
+or 
+#If forgot the token, can reprint
+sudo kubeadm token create --print-join-command
+
+##RESULT:
+
+
+sudo kubeadm join 172.31.25.238:6443 --token mkxn3t.f8mvptn28gddtm06 \
+    --discovery-token-ca-cert-hash sha256:428d16152237b2e42f34345d77868321e22c649c5be46175ba13a72fc1de34d1
+
+
+Step 2: Start Using Cluster as regular user:
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Step 3: Network Setting(Calico) for Node
+
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+#Verification:
+ubuntu@ip-172-31-5-189:~$ kubectl get node
+NAME              STATUS   ROLES    AGE     VERSION
+ip-172-31-5-189   Ready    master   6m54s   v1.21.0
+
+
+Step 4: Join from slave:
+kubeadm join 172.31.5.189:6443 --token nt6yx6.4i4u5x4qhabnv7bt \
+    --discovery-token-ca-cert-hash sha256:83a8a1f1205288b7709adbdc482ed8a1f9683776ddf4d99c5e9958b7c35a1240
+
+
+
+
+========================================= =========================================
+Part 4: Deploy Minion Node(ALL SLAVE NODES)
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+========================================= =========================================
+
+Step 1: Install Docker
+sudo swapoff -a
+
+sudo apt-get update && sudo apt-get upgrade -y
+<Repeat Part 1>
+
+Step 2: Install kubelet kubeadm kubectl
+1. Update the apt package index and install packages needed to use the Kubernetes apt repository:
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl
+
+2. Download the Google Cloud public signing key:
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+3. Add the Kubernetes apt repository:
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+4. Update apt package index, install kubelet, kubeadm and kubectl, and pin their version:
+sudo apt-get update
+sudo apt-get install -y kubeadm=1.21.0-00 kubelet=1.21.0-00 kubectl=1.21.0-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+Step 3:  Join from slave:
+sudo kubeadm join 172.31.5.189:6443 --token nt6yx6.4i4u5x4qhabnv7bt \
+    --discovery-token-ca-cert-hash sha256:83a8a1f1205288b7709adbdc482ed8a1f9683776ddf4d99c5e9958b7c35a1240
